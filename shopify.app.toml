@@ -2,7 +2,7 @@
 
 client_id = "0bb25aa6a5146c2cecbd4bc9a205bfe4"
 name = "techdata"
-application_url = "https://example.com"
+application_url = "https://ingram-techdata-shopify-app-us-three.vercel.app"
 embedded = true
 
 [build]
