@@ -26,4 +26,4 @@ optional_scopes = [ ]
 use_legacy_install_flow = false
 
 [auth]
-redirect_urls = [ ]
+redirect_urls = [ "https://ingram-techdata-shopify-app-us-three.vercel.app/auth/callback" ]
