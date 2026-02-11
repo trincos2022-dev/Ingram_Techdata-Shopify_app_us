@@ -63,7 +63,10 @@ export async function getIngramMappingsForSkus(
       },
     });
   } catch (err) {
-    console.warn("ProductMapping table not available, falling back to Supabase only:", err);
+    console.warn(
+      "ProductMapping table not available, falling back to Supabase only:",
+      err,
+    );
     prismaAvailable = false;
   }
 
@@ -113,35 +116,41 @@ export async function getIngramMappingsForSkus(
 
   // Write-through to local DB (fire-and-forget, don't block checkout)
   if (fetched.length > 0 && prismaAvailable) {
-    void prisma.$transaction(
-      fetched.map((mapping) =>
-        prisma.productMapping.upsert({
-          where: {
-            shopDomain_sku: {
+    void prisma
+      .$transaction(
+        fetched.map((mapping) =>
+          prisma.productMapping.upsert({
+            where: {
+              shopDomain_sku: {
+                shopDomain,
+                sku: mapping.sku,
+              },
+            },
+            create: {
               shopDomain,
               sku: mapping.sku,
+              ingramPartNumber: mapping.ingramPartNumber,
             },
-          },
-          create: {
-            shopDomain,
-            sku: mapping.sku,
-            ingramPartNumber: mapping.ingramPartNumber,
-          },
-          update: {
-            ingramPartNumber: mapping.ingramPartNumber,
-          },
-        }),
-      ),
-    ).catch((err) => {
-      console.error("Failed to cache mappings to local DB:", err);
-    });
+            update: {
+              ingramPartNumber: mapping.ingramPartNumber,
+            },
+          }),
+        ),
+      )
+      .catch((err) => {
+        console.error("Failed to cache mappings to local DB:", err);
+      });
   }
 
   for (const sku of missingSkus) {
     const mapping = fetchedBySku.get(sku) ?? null;
     const cacheKey = `${shopDomain}::${sku}`;
     // Cache both hits and misses to avoid hammering Supabase on rapid requests.
-    skuCache.set(cacheKey, mapping, mapping ? SKU_CACHE_TTL_MS : SKU_CACHE_NEGATIVE_TTL_MS);
+    skuCache.set(
+      cacheKey,
+      mapping,
+      mapping ? SKU_CACHE_TTL_MS : SKU_CACHE_NEGATIVE_TTL_MS,
+    );
     if (mapping) {
       cachedResults.push(mapping);
     }
@@ -155,4 +164,24 @@ export function mappingArrayToRecord(mappings: IngramSkuMapping[]) {
     acc[mapping.sku] = mapping;
     return acc;
   }, {});
+}
+
+//select the correct vender using sku
+export async function getVendor(sku: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("final_product_table_us")
+    .select("source_type")
+    .eq("price_part_nbr", sku)           // ← this is the correct way to filter
+    .maybeSingle();           // recommended when expecting 0 or 1 row
+
+  if (error) {
+    console.error("Error fetching vendor:", error);
+    throw error;              // or return null / throw new Error(...) depending on your needs
+  }
+
+  console.log("Result:", data);
+
+  // data will be: { source_type: "..." } | null
+  return data;
 }
